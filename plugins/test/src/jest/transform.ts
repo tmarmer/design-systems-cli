@@ -18,10 +18,10 @@ const THIS_FILE = fs.readFileSync(__filename);
 const options: TransformOptions = {
   caller: {
     name: '@design-systems/cli-jest',
-    supportsStaticESM: false
+    supportsStaticESM: false,
   },
   compact: false,
-  sourceMaps: 'both'
+  sourceMaps: 'both',
 };
 
 export const canInstrument = true;
@@ -60,9 +60,9 @@ export const process: Transformer['process'] = (
   transformOptions
 ) => {
   const babelOptions = {
-    ...getBabelOptions(filename),
+    ...getBabelOptions(filename, filename),
     ...options,
-    minified: false
+    minified: false,
   };
 
   if (transformOptions && transformOptions.instrument) {
@@ -74,9 +74,9 @@ export const process: Transformer['process'] = (
         {
           // files outside `cwd` will not be instrumented
           cwd: transformOptions.config.rootDir,
-          exclude: []
-        }
-      ]
+          exclude: [],
+        },
+      ],
     ]);
   }
 

@@ -53,7 +53,7 @@ export function getJSOutputFiles(
 
   return {
     cjsFile,
-    mjsFile
+    mjsFile,
   };
 }
 
@@ -66,7 +66,32 @@ export function getBabelConfig(
   const babelConfig = babel.loadPartialConfig({
     configFile,
     filename,
-    envName
+    envName,
+  });
+
+  if (!babelConfig) {
+    throw new Error('Could not find babel config!');
+  }
+
+  return babelConfig;
+}
+
+/** Load @design-systems/cli's default babel.config.js and create path for sourcemap */
+function getBabelConfigWithSourceMap(
+  inFile: string,
+  outFile: string,
+  envName?: SupportedEnvironments,
+  configFile = BABEL_CONFIG
+): babel.PartialConfig {
+  const inPath = path.parse(inFile);
+
+  const babelConfig = babel.loadPartialConfig({
+    configFile,
+    filename: path.resolve(inFile),
+    envName,
+    sourceFileName: `${path.relative(path.dirname(outFile), inPath.dir)}${
+      path.sep
+    }${inPath.base}`,
   });
 
   if (!babelConfig) {
@@ -78,11 +103,17 @@ export function getBabelConfig(
 
 /** Load the options (cli's + user) for babel. */
 export function getBabelOptions(
-  filename: string,
+  inFile: string,
+  outFile: string,
   envName?: SupportedEnvironments,
   configFile = BABEL_CONFIG
 ): babel.TransformOptions {
-  const { options } = getBabelConfig(filename, envName, configFile);
+  const { options } = getBabelConfigWithSourceMap(
+    inFile,
+    outFile,
+    envName,
+    configFile
+  );
   const customConfigPath = path.join(getMonorepoRoot(), 'babel.config.js');
   const customConfig = fs.existsSync(customConfigPath)
     ? customConfigPath
@@ -91,21 +122,23 @@ export function getBabelOptions(
   return {
     ...options,
     configFile: customConfig,
-    babelrc: true
+    babelrc: true,
   };
 }
 
 /** Transpile code using babel for a specific environment. */
 async function transpileForEnv(
-  filename: string,
+  inFile: string,
+  outFile: string,
   envName: SupportedEnvironments,
   configFile: string
 ) {
-  const options = getBabelOptions(filename, envName, configFile);
+  const options = getBabelOptions(inFile, outFile, envName, configFile);
 
+  const filename = path.resolve(inFile);
   return babel.transformFileAsync(filename, {
     ...options,
-    envName
+    envName,
   });
 }
 
@@ -120,12 +153,11 @@ export default async function transpile(
   configFile: string
 ): Promise<SuccessState> {
   const { cjsFile, mjsFile } = getJSOutputFiles(inFile, inDir, outDir);
-  const filename = path.resolve(inFile);
 
   try {
     const [cjsOut, mjsOut] = await Promise.all([
-      transpileForEnv(filename, 'commonjs', configFile),
-      transpileForEnv(filename, 'module', configFile)
+      transpileForEnv(inFile, cjsFile, 'commonjs', configFile),
+      transpileForEnv(inFile, mjsFile, 'module', configFile),
     ]);
 
     await Promise.all([write(cjsOut, cjsFile), write(mjsOut, mjsFile)]);
@@ -143,7 +175,7 @@ export default async function transpile(
           column: parts[4],
           tool: 'BABEL',
           message: parts[2],
-          code: parts[5]
+          code: parts[5],
         })
       );
     } else {
